@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 function App() {
   const [isListening, setIsListening] = useState(false);
@@ -63,14 +64,15 @@ function App() {
       speak('Which topic should I find the news for?');
       setCurrentTask('news');
       setIsWaitingForInput(true);
-    } else if (command.toLowerCase().includes('call')) {
+    } else if (command.toLowerCase().includes('make a call')) {
       setResponse('Please specify the contact to call.');
       speak('Who would you like me to call?');
       setCurrentTask('call');
       setIsWaitingForInput(true);
     } else {
-      setResponse('Command not recognized.');
-      speak('Sorry, I didn’t understand that.');
+      const geminiResponse = await fetchGeminiResponse(command);
+      setResponse(geminiResponse);
+      speak(geminiResponse);
     }
   };
 
@@ -92,7 +94,7 @@ function App() {
 
   const fetchWeather = async () => {
     try {
-      const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.7749&longitude=-122.4194&current_weather=true');
+      const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=17.4065&longitude=78.4772&current_weather=true');
       const data = await response.json();
       return `The current weather is ${data.current_weather.temperature}°C with ${data.current_weather.weathercode}.`;
     } catch (error) {
@@ -102,7 +104,7 @@ function App() {
 
   const fetchNews = async (topic) => {
     try {
-      const response = await fetch(`https://newsapi.org/v2/everything?q=${topic}&apiKey=0191c93b42954a7690070a10de4aa285`);
+      const response = await fetch(`https://newsapi.org/v2/everything?q=${topic}&apiKey=YOUR_NEWSAPI_KEY`);
       const data = await response.json();
       if (data.articles.length > 0) {
         return `Here is a headline: ${data.articles[0].title}`;
@@ -111,6 +113,32 @@ function App() {
       }
     } catch (error) {
       return 'I could not fetch the news.';
+    }
+  };
+
+  const fetchGeminiResponse = async (command) => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const generationConfig = {
+      temperature: 1,
+      topP: 0.95,
+      topK: 40,
+      maxOutputTokens: 8192,
+      responseMimeType: 'text/plain',
+    };
+
+    try {
+      const chatSession = model.startChat({
+        generationConfig,
+        history: [{ role: 'user', parts: [{ text: command }] }],
+      });
+
+      const result = await chatSession.sendMessage(command);
+      return result.response.text();
+    } catch (error) {
+      console.error('Error fetching Gemini response:', error);
+      return 'Sorry, I couldn’t get an answer from Gemini.';
     }
   };
 
